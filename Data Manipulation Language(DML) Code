@@ -1,0 +1,14 @@
+COPY forest_area
+FROM 'C:\\Users\\owner\\Documents\\Online Classes\\Udacity\\SQL Nanodegree\\Projects\\Deforestation Exploration\\forest_area.csv'
+DELIMITER ','
+CSV HEADER; 
+
+COPY land_area
+FROM 'C:\\Users\\owner\\Documents\\Online Classes\\Udacity\\SQL Nanodegree\\Projects\\Deforestation Exploration\\land_area.csv'
+DELIMITER ','
+CSV HEADER;
+
+COPY regions
+FROM 'C:\\Users\\owner\\Documents\\Online Classes\\Udacity\\SQL Nanodegree\\Projects\\Deforestation Exploration\\regions.csv'
+DELIMITER ','
+CSV HEADER;
