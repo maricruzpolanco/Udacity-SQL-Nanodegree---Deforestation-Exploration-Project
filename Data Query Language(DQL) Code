@@ -1,0 +1,835 @@
+/* create view called forestation */
+CREATE VIEW forestation AS 	
+    SELECT fa.country_code AS country_code,
+	   	   fa.country_name AS country_name, 
+	       fa.year AS "year",
+	       fa.forest_area_sqkm,
+	       la.total_area_sq_mi,
+	       r.region,
+	       r.income_group,
+	       ROUND(((fa.forest_area_sqkm / (la.total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage
+      FROM forest_area AS fa
+      	   INNER JOIN land_area AS la
+  	       ON fa.country_code = la.country_code 
+	   		  AND fa.year = la.year
+			
+      	  INNER JOIN regions r
+          ON la.country_code = r.country_code;
+ 
+
+
+--1. Global Situation
+
+-- a. What was the total forest area (in sq km) of the world in 1990? Please keep in mind that you can use the country record denoted as “World" in the region table.
+
+SELECT forest_area_sqkm
+  FROM forestation AS f 
+ WHERE year = 1990 
+   AND country_name = 'World';
+
+
+-- b. What was the total forest area (in sq km) of the world in 2016? Please keep in mind that you can use the country record in the table is denoted as “World.”
+
+SELECT forest_area_sqkm
+  FROM forestation AS f
+ WHERE year = 2016 
+   AND country_name = 'World';
+
+
+
+	
+-- c. What was the change (in sq km) in the forest area of the world from 1990 to 2016?
+
+--WITH
+
+WITH world_forest_area_1990 AS (
+    				SELECT country_code,
+	 	                   forest_area_sqkm AS fa_1990
+					FROM forestation AS f
+	                WHERE f.country_name = 'World' AND f.year = 1990),
+					
+	 world_forest_area_2016 AS (
+		 		    SELECT country_code,
+		 				   forest_area_sqkm AS fa_2016
+					FROM forestation AS f
+	                WHERE f.country_name = 'World' AND f.year = 2016)
+	            
+SELECT (fa_1990 - fa_2016) AS loss_in_world_forest_area_km,
+        round((((fa_1990 - fa_2016)/fa_1990) * 100)::numeric, 3) || '%' AS percentage_loss_in_world_forest_area_km
+FROM world_forest_area_1990 AS wfa_1990
+JOIN world_forest_area_2016 AS wfa_2016
+  ON wfa_1990.country_code = wfa_2016.country_code;
+
+--Subquery 
+SELECT (fa_1990 - fa_2016) AS world_forest_area_change
+  FROM
+  	   (SELECT country_code,
+	     	   forest_area_sqkm AS fa_1990
+  		  FROM forestation AS f1
+  		 WHERE f1.country_name = 'World' AND f1.year = 1990) wfa_1990
+		  
+     INNER JOIN  
+  	   		  (SELECT country_code,
+                      forest_area_sqkm fa_2016
+  		         FROM forestation AS f2
+  		        WHERE f2.country_name = 'World' 
+			 	  AND f2.year = 2016) wfa_2016
+    	ON wfa_1990.country_code = wfa_2016.country_code;
+
+
+-- d. What was the percent change in forest area of the world between 1990 and 2016?
+
+SELECT ROUND((((fa_1990 - fa_2016)/fa_1990) * 100)::numeric, 2) || '%' AS world_forest_area_percentage_loss
+  FROM
+  	   (SELECT country_code,
+	           forest_area_sqkm AS fa_1990
+  		  FROM forestation AS f1
+  		 WHERE f1.country_name = 'World' 
+		   AND f1.year = 1990) wfa_1990
+	 INNER JOIN  
+  			(SELECT country_code,
+                    forest_area_sqkm fa_2016
+  			   FROM forestation AS f2
+              WHERE f2.country_name = 'World' 
+			    AND f2.year = 2016) wfa_2016
+    ON wfa_1990.country_code = wfa_2016.country_code;
+	
+	
+
+-- Area lost is slighty more than land area for x country listed for year of 2016, which is 
+
+SELECT country_name, 
+	   (total_area_sq_mi * 2.59) - 
+  FROM forestation 
+ WHERE year = 2016
+   AND total_area_sq_mi * 2.59 <
+	   (SELECT (fa_1990 - fa_2016) AS world_forest_area_change_sqkm
+          FROM
+  	          (SELECT country_name,
+	     	        forest_area_sqkm AS fa_1990
+  		       FROM forestation AS f1
+  		      WHERE f1.country_name = 'World' 
+			    AND f1.year = 1990) wfa_1990  
+		   INNER JOIN  
+  	   		 (SELECT country_name,
+                     forest_area_sqkm AS fa_2016
+  		       FROM  forestation AS f2
+  		      WHERE  f2.country_name = 'World' 
+			    AND  f2.year = 2016) wfa_2016
+    	 ON wfa_1990.country_name = wfa_2016.country_name) t1
+ORDER BY 2 DESC
+LIMIT 1;
+
+
+-- e. If you compare the amount of forest area lost between 1990 and 2016, to which country's total area in 2016 is it closest to?
+
+SELECT country_name AS country,
+	   total_area_sqkm,
+       diff_between_world_forest_area_loss_and_country_total_area_sqkm
+  FROM 
+      (SELECT DISTINCT country_name,
+	                   ROUND((total_area_sq_mi * 2.59)::numeric, 2) AS total_area_sqkm,
+					   ROUND(ABS((total_area_sq_mi * 2.59) - (t1.world_forest_area_change_sqkm))::numeric, 2) AS diff_between_world_forest_area_loss_and_country_total_area_sqkm
+         FROM      	   
+	         (SELECT (fa_1990 - fa_2016) AS world_forest_area_change_sqkm
+                FROM
+  	                 (SELECT country_name,
+	     	                 forest_area_sqkm AS fa_1990
+  		                FROM forestation AS f1
+  		               WHERE f1.country_name = 'World' 
+			             AND f1.year = 1990) wfa_1990  
+		          INNER JOIN  
+  	   		         (SELECT country_name,
+                             forest_area_sqkm AS fa_2016
+  		               FROM  forestation AS f2
+  		              WHERE  f2.country_name = 'World' 
+			            AND  f2.year = 2016) wfa_2016
+		          ON wfa_1990.country_name = wfa_2016.country_name) t1
+            INNER JOIN forestation f
+            ON country_name = f.country_name
+         WHERE country_name NOT LIKE 'World'
+         ORDER BY 1 DESC) t1
+ WHERE diff_between_world_forest_area_loss_and_country_total_area_sqkm = 
+			 (SELECT MIN(diff_between_world_forest_area_loss_and_country_total_area_sqkm)
+  				FROM 
+	  				(SELECT DISTINCT country_name,
+              				ROUND(ABS((total_area_sq_mi * 2.59) - (t1.world_forest_area_change_sqkm))::numeric, 2) AS diff_between_world_forest_area_loss_and_country_total_area_sqkm
+        			   FROM    	   
+	            			(SELECT (fa_1990 - fa_2016) AS world_forest_area_change_sqkm
+                   			   FROM
+  	                               (SELECT country_name,
+	     	                               forest_area_sqkm AS fa_1990
+  		                              FROM forestation AS f1
+  		                             WHERE f1.country_name = 'World' 
+			                           AND f1.year = 1990) wfa_1990  
+		                  INNER JOIN  
+  	   		            	(SELECT country_name,
+                                    forest_area_sqkm AS fa_2016
+  		                      FROM  forestation AS f2
+  		                     WHERE  f2.country_name = 'World' 
+			                   AND  f2.year = 2016) wfa_2016
+		                  ON wfa_1990.country_name = wfa_2016.country_name) t1
+                   INNER JOIN forestation f
+                   ON country_name = f.country_name
+             WHERE country_name NOT LIKE 'World'
+             ORDER BY 1 DESC) t1)
+		
+		
+		
+ORDER BY 2 DESC
+LIMIT 1;
+
+
+--2. Regional Outlook
+
+-- a. What was the percent forest of the entire world in 2016? 
+
+SELECT forest_percentage
+  FROM forestation 
+ WHERE country_name = 'World' 
+   AND year = 2016; 
+   
+   
+-- Which region had the HIGHEST percent forest in 2016, and which had the LOWEST, to 2 decimal places?  
+   
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MAX(t1.forest_percent_by_region_2016) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_2016
+         			   FROM forestation
+        		      WHERE year = 2016
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 2016
+   
+UNION 
+
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MIN(t1.forest_percent_by_region_2016) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_2016
+         			   FROM forestation
+        		      WHERE year = 2016
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 2016;
+
+
+-- b. What was the percent forest of the entire world in 1990? 
+
+SELECT forest_percentage
+  FROM forestation 
+ WHERE country_name = 'World' 
+   AND year = 1990; 
+
+
+
+-- Regions with the highest and lowest relative forestation in 1990: 
+
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MAX(t1.forest_percent_by_region_1990) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_1990
+         			   FROM forestation
+        		      WHERE year = 1990
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 1990
+   
+UNION 
+
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MIN(t1.forest_percent_by_region_1990) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_1990
+         			   FROM forestation
+        		      WHERE year = 1990
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 1990;
+
+
+
+
+-- Table 2.1: Percent Forest Area by Region, 1990 & 2016: 
+SELECT t1.region,
+       t1.forest_percentage_1990,
+	   t2.forest_percentage_2016
+  FROM 
+ 	   (SELECT region,
+	           ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage_1990
+  		  FROM forestation f1
+ 		 WHERE year = 1990
+ 		 GROUP BY 1
+ 		 ORDER BY 2 DESC) t1
+
+    INNER JOIN 
+
+	  (SELECT region,
+	          ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage_2016
+         FROM forestation f2
+        WHERE year = 2016
+        GROUP BY 1
+        ORDER BY 2 DESC) t2
+    ON t1.region = t2.region
+GROUP BY 1, 2, 3
+ORDER BY 2 DESC, 3 DESC;
+                      
+
+-- Based on the table you created, which regions of the world DECREASED in forest area from 1990 to 2016?
+
+SELECT t3.region, 
+	   t3.forest_percentage_1990,
+	   t3.forest_percentage_2016
+FROM 
+
+(SELECT t1.region,
+        t1.forest_percentage_1990,
+	    t2.forest_percentage_2016
+   FROM 
+ 	   (SELECT region,
+	           ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage_1990
+  		  FROM forestation f1
+ 		 WHERE year = 1990
+ 		 GROUP BY 1
+ 		 ORDER BY 2 DESC) t1
+
+    INNER JOIN 
+
+	  (SELECT region,
+	          ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage_2016
+         FROM forestation f2
+        WHERE year = 2016
+        GROUP BY 1
+        ORDER BY 2 DESC) t2
+    ON t1.region = t2.region) t3
+WHERE region NOT LIKE 'World' AND t3.forest_percentage_1990 > t3.forest_percentage_2016
+GROUP BY 1, 2, 3
+ORDER BY 2 DESC, 3 DESC;
+
+
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MIN(t1.forest_percent_by_region_2016) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_2016
+         			   FROM forestation
+        		      WHERE year = 2016
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 2016;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MAX(t1.forest_percent_by_region_2016) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_2016
+         			   FROM forestation
+        		      WHERE year = 2016
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 2016
+   
+UNION 
+
+SELECT f1.region,
+	   f1.year,
+	   ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS highest_and_lowest_percent_forest
+  FROM forestation f1 
+ GROUP BY 1, 2
+HAVING ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) = 
+		(SELECT MIN(t1.forest_percent_by_region_2016) AS highest_percent_forest
+		   FROM 
+	  				(SELECT region,
+	          				ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percent_by_region_2016
+         			   FROM forestation
+        		      WHERE year = 2016
+                      GROUP BY 1
+                      ORDER BY 2 DESC) t1)
+   AND f1.year = 2016;
+   
+   
+-- c. Regions of the world that DECREASED in forest area from 1990 to 2016
+
+    
+SELECT region_fa_1990.region,
+	   (region_fa_1990.fa_1990 - region_fa_2016.fa_2016) AS region_forest_area_decrease_sqkm
+  FROM
+  	   (SELECT region,
+	     	   ROUND(SUM(forest_area_sqkm)) AS fa_1990
+  		  FROM forestation AS f1
+  		 WHERE year = 1990
+		   AND region NOT LIKE 'World'
+	     GROUP BY 1) region_fa_1990
+     INNER JOIN 
+	 
+  	    (SELECT region,
+	     	    ROUND(SUM(forest_area_sqkm)) AS fa_2016
+  		   FROM forestation AS f2
+  		  WHERE year = 2016
+			AND region NOT LIKE 'World'
+		  GROUP BY 1) region_fa_2016 
+     ON region_fa_1990.region = region_fa_2016.region
+WHERE (region_fa_1990.fa_1990 - region_fa_2016.fa_2016) > 0 
+GROUP BY 1, 2
+ORDER BY 2 DESC;
+ 
+
+
+
+
+--Only regions of the world that decreased in percent forest area from 1990 to 2016: 
+
+
+SELECT region,
+	   year,
+	   forest_percentage,
+	   LAG(forest_percentage) OVER (PARTITION BY region ORDER BY forest_percentage) AS lag,
+	   forest_percentage - LAG(forest_percentage) OVER (PARTITION BY region ORDER BY forest_percentage) AS lag_difference
+  FROM (  
+		SELECT region,
+  	           year,
+	           ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage
+		FROM forestation
+	    WHERE year IN (1990, 2016)
+		GROUP BY 1, 2
+	    ORDER BY 1 ASC, year ASC
+		) sub
+  ORDER BY 1 ASC, 2 ASC;		
+
+		
+SELECT region,
+	   year,
+	   forest_percentage,
+	   LAG(forest_percentage) OVER (PARTITION BY region ORDER BY forest_percentage) AS lag,
+	   LEAD(forest_percentage) OVER (PARTITION BY region ORDER BY forest_percentage) AS lead,
+	   forest_percentage - LAG(forest_percentage) OVER (PARTITION BY region ORDER BY forest_percentage) AS lag_difference,
+	   LEAD(forest_percentage) OVER (PARTITION BY region ORDER BY forest_percentage) - forest_percentage AS lead_difference
+  FROM (  
+		SELECT region,
+  	           year,
+	           ROUND(((SUM(forest_area_sqkm) / SUM(total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage
+		FROM forestation
+	    WHERE year IN (1990, 2016)
+		GROUP BY 1, 2
+	    ORDER BY 1, 2
+		) sub;		
+		
+	
+SELECT DISTINCT region,
+	   year,
+	   forest_area_sqkm,
+	   LAG(forest_area_sqkm) OVER (PARTITION BY region ORDER BY forest_area_sqkm) AS lag,
+	   LEAD(forest_area_sqkm) OVER (PARTITION BY region ORDER BY forest_area_sqkm) AS lead,
+	   forest_area_sqkm - LAG(forest_area_sqkm) OVER (PARTITION BY region ORDER BY forest_area_sqkm) AS lag_difference,
+	   LEAD(forest_area_sqkm) OVER (PARTITION BY region ORDER BY forest_area_sqkm) - forest_area_sqkm AS lead_difference
+  FROM (  
+		SELECT DISTINCT region,
+  	           year,
+	           forest_area_sqkm
+		FROM forestation
+	    WHERE year IN (1990, 2016)
+		GROUP BY 1, 2, 3
+	    ORDER BY 2, 1
+		) sub;
+		
+			
+		
+		
+-- Percent forest area of the world decrease from 1990 to 2016
+
+SELECT * 
+FROM forestation f
+WHERE f.country_name = 'World' AND year IN (1990, 2016)
+
+
+SELECT country_name,
+       year,
+       forest_percentage
+	   (PARTITION BY country_name ORDER BY year) AS forest_area_percentage
+FROM forestation
+GROUP BY 1, 2, 3
+ORDER BY 2;
+
+-- with no Window alias 
+SELECT t1.region,
+	   t1.year,
+	   t1.forest_area_percentage,
+	   LAG(forest_area_percentage) OVER (PARTITION BY region ORDER BY forest_area_percentage) AS lag,
+	   LEAD(forest_area_percentage) OVER (PARTITION BY region ORDER BY forest_area_percentage) AS lead,
+	   forest_area_percentage - LAG(forest_area_percentage) OVER (PARTITION BY region ORDER BY forest_area_percentage) AS lag_difference,
+	   LEAD(forest_area_percentage) OVER (PARTITION BY region ORDER BY forest_area_percentage) - forest_area_percentage AS lead_difference
+FROM (  
+		SELECT r.region,
+  	           fa.year,
+	       round(((SUM(fa.forest_area_sqkm) / SUM(la.total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_area_percentage
+		FROM forest_area fa 
+		JOIN land_area la
+  	      ON fa.country_code = la.country_code AND fa.year = la.year
+		JOIN regions r 
+  	      ON r.country_code = la.country_code 
+		GROUP BY 1, 2
+	    ORDER BY year DESC, r.region DESC
+		) t1
+WHERE t1.year IN (1990, 2016)
+
+
+--with Window alias 
+SELECT t1.region,
+	   t1.year,
+	   t1.forest_percentage,
+	   LAG(forest_percentage) OVER region_year_window AS lag,
+	   LEAD(forest_percentage) OVER region_year_window AS lead,
+	   forest_percentage - LAG(forest_percentage) OVER region_year_window AS lag_difference,
+	   LEAD(forest_percentage) OVER region_year_window - forest_percentage AS lead_difference
+FROM (  
+		SELECT r.region,
+  	           fa.year,
+	       round(((SUM(fa.forest_area_sqkm) / SUM(la.total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage
+		FROM forest_area fa 
+		JOIN land_area la
+  	      ON fa.country_code = la.country_code AND fa.year = la.year
+		JOIN regions r 
+  	      ON r.country_code = la.country_code 
+		GROUP BY 1, 2
+	    ORDER BY year DESC, r.region DESC
+		) t1
+WHERE t1.year IN (1990, 2016)
+WINDOW region_year_window AS (PARTITION BY region ORDER BY forest_percentage)
+ORDER BY 1, 2
+
+
+--3. Country-Level Detail
+
+-- Increase forest area from 1990 to 2016 (Absolute Forest Area Change)
+
+SELECT f.country_name,
+	   f.region,
+	   f.year, 
+	   f.forest_area_sqkm, 
+	   LAG(f.forest_area_sqkm) OVER country_name_year_window AS lag,
+	   f.forest_area_sqkm - LAG(f.forest_area_sqkm) OVER country_name_year_window AS lag_difference   
+FROM forestation f
+WHERE year IN (1990, 2016)
+WINDOW country_name_year_window AS (PARTITION BY country_name ORDER BY year)
+
+ORDER BY 6 DESC, 1, 3
+
+-- Increase in forest area from 1990 to 2016 (Percent change)
+
+SELECT f.country_name,
+	   f.region,
+	   f.year, 
+	   f.forest_area_sqkm, 
+	   LAG(f.forest_area_sqkm) OVER country_name_year_window AS lag,
+	   ((f.forest_area_sqkm - LAG(f.forest_area_sqkm) OVER country_name_year_window)/f.forest_area_sqkm) * 100 AS lag_difference   
+FROM forestation f
+WHERE year IN (1990, 2016)
+WINDOW country_name_year_window AS (PARTITION BY country_name ORDER BY year)
+ORDER BY 6 DESC, 1, 3
+
+
+--Table 3.1: Top 5 Amount Decrease in Forest Area by Country, 1990 & 2016:
+
+SELECT  country_fa_1990.country_name,
+		country_fa_1990.region,
+	    (country_fa_1990.fa_1990 - country_fa_2016.fa_2016) AS absolute_forest_area_change_sqkm
+  FROM
+  	   (SELECT country_name,
+		       region,
+	     	   ROUND(SUM(forest_area_sqkm)) AS fa_1990
+  		  FROM forestation AS f1
+  		 WHERE year = 1990
+		   AND region NOT LIKE 'World'
+		   AND forest_area_sqkm IS NOT NULL
+	     GROUP BY 2, 1
+	     ORDER BY 3 DESC, 1 ASC, 2 ASC) country_fa_1990
+     INNER JOIN 
+  	    (SELECT country_name,
+		       region,
+	     	   ROUND(SUM(forest_area_sqkm)) AS fa_2016
+  		  FROM forestation AS f2
+  		 WHERE year = 2016
+		   AND region NOT LIKE 'World'
+		   AND forest_area_sqkm IS NOT NULL
+	     GROUP BY 2, 1
+	     ORDER BY 3 DESC, 1, 2) country_fa_2016
+     ON country_fa_1990.country_name = country_fa_2016.country_name
+WHERE (country_fa_1990.fa_1990 - country_fa_2016.fa_2016) > 0 
+GROUP BY 2, 1, 3
+ORDER BY 3 DESC, 2, 1
+LIMIT 5;
+
+
+
+
+
+
+
+
+SELECT f.country_name,
+       f.region,
+	   f.year,
+	   f.forest_area_sqkm, 
+	   LEAD(f.forest_area_sqkm) OVER country_name_year_window AS lead,
+	   LEAD(f.forest_area_sqkm) OVER country_name_year_window - f.forest_area_sqkm AS lead_difference
+FROM forestation f
+WHERE year IN (1990, 2016) AND f.country_name NOT Like 'World'
+WINDOW country_name_year_window AS (PARTITION BY country_name ORDER BY year)
+ORDER BY 6, 3, 1
+
+
+--Table 3.2: Top 5 Percent Decrease in Forest Area by Country, 1990 & 2016:
+
+-- b. Which 5 countries saw the largest percent decrease in forest area from 1990 to 2016? What was the percent change to 2 decimal places for each?
+
+
+SELECT  wfa_1990.country_name AS country,
+	    ROUND((((fa_1990 - fa_2016)/fa_1990) * 100)::numeric, 2) AS pct_forest_area_change
+  FROM
+  	   (SELECT country_name,
+	           forest_area_sqkm AS fa_1990
+  		  FROM forestation AS f1
+  		 WHERE f1.country_name NOT LIKE 'World'
+		   AND forest_area_sqkm IS NOT NULL
+		   AND f1.year = 1990) wfa_1990
+	 INNER JOIN  
+  	   (SELECT country_name,
+               forest_area_sqkm fa_2016
+  	      FROM forestation AS f2
+         WHERE f2.country_name NOT LIKE 'World' 
+		   AND forest_area_sqkm IS NOT NULL
+		   AND f2.year = 2016) wfa_2016
+     ON wfa_1990.country_name = wfa_2016.country_name
+ORDER BY 2 DESC
+LIMIT 5; 
+
+
+-- Which 5 countries saw the largest percent increase in forest area from 1990 to 2016? What was the percent change to 2 decimal places for each?
+
+SELECT  wfa_1990.country_name AS country,
+	    ROUND((((fa_2016 - fa_1990)/fa_2016) * 100)::numeric, 2) AS forest_area_percentage_increase
+  FROM
+  	   (SELECT country_name,
+			   ROUND((total_area_sq_mi * 2.59)::numeric, 2) AS total_area_sqkm,
+	           forest_area_sqkm AS fa_1990
+  		  FROM forestation AS f1
+  		 WHERE f1.country_name NOT LIKE 'World'
+		   AND forest_area_sqkm IS NOT NULL
+		   AND f1.year = 1990) wfa_1990
+	 INNER JOIN  
+  	   (SELECT country_name,
+			   ROUND((total_area_sq_mi * 2.59)::numeric, 2) AS total_area_sqkm,
+               forest_area_sqkm fa_2016
+  	      FROM forestation AS f2
+         WHERE f2.country_name NOT LIKE 'World' 
+		   AND forest_area_sqkm IS NOT NULL
+		   AND f2.year = 2016) wfa_2016
+     ON wfa_1990.country_name = wfa_2016.country_name
+ORDER BY 2 DESC
+--Limit 5;
+
+
+
+
+SELECT  country_fa_1990.country_name,
+		country_fa_1990.region,
+	   (country_fa_1990.forest_percentage_1990 - country_fa_2016.forest_percentage_2016) AS country_forest_area_decrease_sqkm
+  FROM
+  	   (SELECT country_name,
+		       region,
+	     	   round(((SUM(f1.forest_area_sqkm) / SUM(f1.total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage_1990
+  		  FROM forestation AS f1
+  		 WHERE year = 1990
+		   AND region NOT LIKE 'World'
+		   AND forest_area_sqkm IS NOT NULL
+	     GROUP BY 2, 1
+	     ORDER BY 3 DESC, 1 ASC, 2 ASC) country_fa_1990
+     INNER JOIN 
+  	    (SELECT country_name,
+		       region,
+	     	   round(((SUM(f2.forest_area_sqkm) / SUM(f2.total_area_sq_mi * 2.59)) * 100)::numeric, 2) AS forest_percentage_2016
+  		  FROM forestation AS f2
+  		 WHERE year = 2016
+		   AND region NOT LIKE 'World'
+		   AND forest_area_sqkm IS NOT NULL
+	     GROUP BY 2, 1
+	     ORDER BY 3 DESC, 1 ASC, 2 ASC) country_fa_2016
+     ON country_fa_1990.country_name = country_fa_2016.country_name
+WHERE (country_fa_1990.forest_percentage_1990 - country_fa_2016.forest_percentage_2016) > 0 
+GROUP BY 2, 1, 3
+ORDER BY 3 DESC, 2, 1;
+
+
+
+
+SELECT f.country_name,
+       f.region,
+	   f.year, 
+	   f.forest_area_sqkm, 
+	   LEAD(f.forest_area_sqkm) OVER country_name_year_window AS lead,
+	   ((LEAD(f.forest_area_sqkm) OVER country_name_year_window - f.forest_area_sqkm)/f.forest_area_sqkm) * 100 AS lead_difference_percentage
+FROM forestation f
+WHERE year IN (1990, 2016) AND f.country_name NOT Like 'World'
+WINDOW country_name_year_window AS (PARTITION BY country_name ORDER BY year)
+ORDER BY 6, 3, 1
+
+
+--Table 3.3: Count of Countries Grouped by Forestation Percent Quartiles, 2016:
+
+-- c. If countries were grouped by percent forestation in quartiles, which group had the most countries in it in 2016?
+ 
+       SELECT quartile,
+	           COUNT(*) AS number_of_countries
+  		 FROM 
+	            (SELECT DISTINCT country_name,
+	                             forest_percentage,
+	                             CASE 
+				 					 WHEN forest_percentage BETWEEN 0 AND 25 THEN '0% - 25%' 
+		                 		     WHEN forest_percentage BETWEEN 25 AND 50 THEN '25% - 50%'
+					                 WHEN forest_percentage BETWEEN 50 AND 75 THEN '50% - 75%'
+						             ELSE '75% - 100%' 
+						             END AS quartile
+				   FROM forestation
+	              WHERE year = '2016' 
+	                AND country_name NOT LIKE 'World' 
+	                AND forest_percentage IS NOT NULL
+	              GROUP BY 2, 1
+	              ORDER BY 2 DESC) t1
+          GROUP BY 1
+          ORDER BY 2 DESC
+		  LIMIT 1;
+
+
+
+ --c. If countries were grouped by percent forestation in quartiles, which group had the most countries in it in 2016?
+
+SELECT quartile,
+	   COUNT(*) AS number_of_countries
+FROM 
+	            (SELECT DISTINCT country_name,
+	                             forest_percentage,
+	                             CASE 
+				 					 WHEN forest_percentage BETWEEN 0 AND 25 THEN '0% - 25%' 
+		                 		     WHEN forest_percentage BETWEEN 25 AND 50 THEN '25% - 50%'
+					                 WHEN forest_percentage BETWEEN 50 AND 75 THEN '50% - 75%'
+						             ELSE '75% - 100%' 
+						             END AS quartile
+				   FROM forestation
+	              WHERE year = '2016' 
+	                AND country_name NOT LIKE 'World' 
+	                AND forest_percentage IS NOT NULL
+	              GROUP BY 2, 1
+	              ORDER BY 2 DESC) t1
+          GROUP BY 1
+          ORDER BY 2 DESC
+		  LIMIT 1;
+      
+
+
+
+--Table 3.4: Top Quartile Countries, 2016:
+
+-- d. List all of the countries that were in the 4th quartile (percent forest > 75%) in 2016.
+
+SELECT country_name,
+	   region, 
+	   forest_percentage AS pct_designated_as_forest,
+	   quartile
+  FROM 
+	   (SELECT  country_name,
+	            region, 
+	            forest_percentage,
+	            CASE 
+					 WHEN forest_percentage BETWEEN 0 AND 25 THEN '0%-25%' 
+		             WHEN forest_percentage BETWEEN 25 AND 50 THEN '25%-50%'
+					 WHEN forest_percentage BETWEEN 50 AND 75 THEN '50%-75%'
+					 ELSE '75%-100%'
+				END AS quartile
+		   FROM forestation
+		  WHERE year = '2016' 
+            AND country_name NOT LIKE 'World' 
+            AND forest_percentage IS NOT NULL
+	      ORDER BY 4 DESC, 3 DESC, 2, 1) t1
+  WHERE quartile = '75%-100%'
+  GROUP BY 4, 2, 1, 3
+  ORDER BY 3 DESC, 2, 1;
+
+
+-- e. How many countries had a percent forestation higher than the United States in 2016?
+
+
+SELECT COUNT(*) AS number_of_countries_with_percent_forestation_highter_than_United_States_in_2016
+  FROM 
+	   (SELECT t1.country_name,
+	           t1.forest_percentage
+          FROM 
+	   		   (SELECT  country_name,
+	                    forest_percentage
+		           FROM forestation
+		          WHERE year = '2016' 
+                    AND country_name NOT LIKE 'World' 
+                    AND forest_percentage IS NOT NULL
+	              ORDER BY 2 DESC, 1) t1
+  		 GROUP BY 1, 2
+ HAVING forest_percentage > 
+								(SELECT forest_percentage
+  								   FROM forestation 
+                                  WHERE country_name = 'World' 
+                                    AND year = 2016)
+ ORDER BY 2 ASC) t2;
+ 
+ 
+ 
+
+
+ 
