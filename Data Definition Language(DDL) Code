@@ -1,0 +1,33 @@
+CREATE TABLE "forest_area" (
+	country_code VARCHAR(3),
+	country_name TEXT,
+	year smallint,
+	forest_area_sqkm float8,
+	CONSTRAINT "forest_area_pk" PRIMARY KEY ("country_code", "year"),
+	CONSTRAINT "forest_area_land_area_fk" FOREIGN KEY ("country_code", "year") REFERENCES "land_area" ("country_code", "year"),
+	CONSTRAINT "forest_area_regions_fk" FOREIGN KEY ("country_code") REFERENCES "regions" ("country_code"),
+);
+
+CREATE TABLE "land_area" (
+	country_code VARCHAR(3),
+	country_name TEXT,
+	year smallint,
+	forest_area_sq_mi float8,
+	CONSTRAINT "land_area_pk" PRIMARY KEY ("country_code", "year"),
+	CONSTRAINT "land_area_forest_area_fk" FOREIGN KEY ("country_code", "year") REFERENCES "forest_area" ("country_code", "year"),
+	CONSTRAINT "land_area_regions_fk" FOREIGN KEY ("country_code") REFERENCES "regions" ("country_code")
+);
+
+CREATE TABLE "regions" (
+	country_name TEXT,
+	country_code VARCHAR(3),
+	region TEXT,
+	income_group VARCHAR(25),
+	CONSTRAINT "regions_pk" PRIMARY KEY ("country_code"),
+	CONSTRAINT "regions_forest_area_fk" FOREIGN KEY ("country_code") REFERENCES "forest_area" ("country_code"),
+	CONSTRAINT "regions_land_area_fk" FOREIGN KEY ("country_code") REFERENCES "land_area" ("country_code"),
+	CONSTRAINT "country_name_unique" UNIQUE ("country_name"),
+	CONSTRAINT "region_unique" UNIQUE ("country_code")	
+);
+
+
